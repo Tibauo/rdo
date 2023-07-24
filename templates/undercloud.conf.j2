@@ -1,0 +1,27 @@
+[DEFAULT]
+clean_nodes = false
+cleanup = true
+container_images_file = /home/stack/containers-prepare-parameter.yaml
+enabled_hardware_types = ipmi,manual-management
+ipxe_enabled = true
+local_interface = eth1
+local_ip = 10.1.1.10/24
+local_mtu = 1500
+local_subnet = ctlplane-subnet
+overcloud_domain_name = overcloud.mylab.local
+subnets = ctlplane-subnet
+undercloud_admin_host = {{ undercloud_admin_host }}
+undercloud_public_host = {{ undercloud_public_host }}
+undercloud_debug = false
+undercloud_hostname = {{ ansible_nodename }}
+undercloud_timezone = Europe/Paris
+
+
+[ctlplane-subnet]
+cidr = 10.1.1.0/24
+dhcp_start = 10.1.1.100
+dhcp_end = 10.1.1.110
+dhcp_exclude = 10.1.1.105
+gateway = 10.1.1.1
+inspection_iprange = 10.1.1.60,10.1.1.70
+masquerade = True

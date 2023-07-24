@@ -1,0 +1,135 @@
+---
+# tasks file for rdo
+- name: Create Stack user
+  ansible.builtin.user:
+    name: stack
+    shell: /bin/bash
+
+- name: Sudoer user stack
+  ansible.builtin.lineinfile:
+    dest: /etc/sudoers.d/stack
+    state: present
+    regexp: '^stack'
+    line: 'stack ALL=(root) NOPASSWD:ALL'
+    validate: 'visudo -cf %s'
+    create: yes
+    mode: '0440'
+
+- name: Install repo RDO
+  ansible.builtin.dnf:
+    name: "{{ rdo_repo }}"
+    state: present
+    disable_gpg_check: true
+
+- name: configure tripleo repos
+  ansible.builtin.command: "sudo -E tripleo-repos current -b {{ openstack_release }}"
+
+- name: Install tripleoclient
+  ansible.builtin.dnf:
+    name: python3-tripleoclient
+    state: present
+
+- name: Fix dns.rdtypes has no attribute ANY
+  ansible.builtin.pip:
+    name:
+      - dnspython==2.2.1
+      - eventlet==0.33.3
+
+- name: Generate container prepare parameter
+  ansible.builtin.command: "openstack tripleo container image prepare default --local-push-destination --output-env-file /home/stack/containers-prepare-parameter.yaml"
+  become: yes
+  become_method: su
+  become_user: stack
+  args:
+    chdir: /home/stack  
+
+- name: Delete all ceph line
+  ansible.builtin.lineinfile:
+    path: /home/stack/containers-prepare-parameter.yaml
+    regexp: '^      ceph_'
+    state: absent
+    backup: yes
+  become: yes
+  become_method: su
+  become_user: stack
+
+- name: Push undercloud.conf
+  ansible.builtin.template:
+    src: undercloud.conf.j2
+    dest: /home/stack/undercloud.conf
+    owner: stack
+  become: yes
+  become_method: su
+  become_user: stack
+
+- name: Install undercloud
+  ansible.builtin.command: "openstack undercloud install --no-validations"
+  become: yes
+  become_method: su
+  become_user: stack
+  args:
+    chdir: /home/stack
+
+- name: Push container image prepare
+  ansible.builtin.template:
+    src: nodes.yaml.j2
+    dest: /home/stack/nodes.yaml
+    owner: stack
+    group: stack
+
+- name: Download director images
+  ansible.builtin.dnf:
+    name:
+      - rhosp-director-images
+      - rhosp-director-images-ipa-x86_64
+    state: present
+
+- name: Untar images
+  ansible.builtin.unarchive:
+    src: "{{ item }}"
+    dest: /home/stack/images
+    remote_src: yes
+  loop:
+    - /usr/share/rhosp-director-images/overcloud-full-latest-16.2.tar
+    - /usr/share/rhosp-director-images/ironic-python-agent-latest-16.2.tar
+
+- name: Upload image on openstack
+  ansible.builtin.shell: |
+    source /home/stack/stackrc
+    openstack overcloud image upload --image-path /home/stack/images/
+  become: yes
+  become_user: stack
+  args:
+    chdir: /home/stack
+
+- name: Install requirement for vbmc
+  ansible.builtin.dnf:
+    name:
+      - libvirt
+      - libvirt-devel
+      - gcc
+      - ipmitool
+    state: present
+
+- name: Install virtualbmc
+  ansible.builtin.pip:
+    name: virtualbmc
+    executable: pip3
+
+- name: push vbmc service
+  ansible.builtin.copy:
+    src: vbmcd.service
+    dest: /etc/systemd/system/vbmcd.service
+
+- name: Start vbmcd service
+  ansible.builtin.service:
+    name: vbmcd
+    enabled: yes
+    state: started
+
+- name: Push nodes.yaml
+  ansible.builtin.template:
+    src: nodes.yaml.j2
+    dest: /home/stack/nodes.yaml
+    owner: stack
+    group: stack
