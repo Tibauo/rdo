@@ -77,30 +77,18 @@
     owner: stack
     group: stack
 
-- name: Download director images
-  ansible.builtin.dnf:
-    name:
-      - rhosp-director-images
-      - rhosp-director-images-ipa-x86_64
-    state: present
-
 - name: Untar images
   ansible.builtin.unarchive:
     src: "{{ item }}"
     dest: /home/stack/images
     remote_src: yes
-  loop:
-    - /usr/share/rhosp-director-images/overcloud-full-latest-16.2.tar
-    - /usr/share/rhosp-director-images/ironic-python-agent-latest-16.2.tar
+  loop: "{{ node_images }}"
 
 - name: Upload image on openstack
   ansible.builtin.shell: |
     source /home/stack/stackrc
     openstack overcloud image upload --image-path /home/stack/images/
-  become: yes
   become_user: stack
-  args:
-    chdir: /home/stack
 
 - name: Install requirement for vbmc
   ansible.builtin.dnf:
